@@ -12,7 +12,6 @@ class MotionModel:
     def __init__(self):
 
         self.deterministic = rospy.get_param("~deterministic")
-        self.num_particles = rospy.get_param("~num_particles")
 
         # Pre-compute cosines, sines, arcsines, and arccosines:
             # Every time we run vec2pose and pose2vec it uses cosines, sines, arccosines, and arcsines
