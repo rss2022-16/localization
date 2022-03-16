@@ -4,17 +4,15 @@ Notes:
 - How do we get "deterministic" and "num_particles" parameters into this file (for integration)
 """
 
+import rospy
 import numpy as np
 
 class MotionModel:
 
     def __init__(self):
 
-        self.deterministic = True # Pass in from particle_filter.py
-
-
-        self.num_particles = 1000 # Pass in from particle_filter.py
-        self.particles = np.empty([self.num_particles, 3])
+        self.deterministic = rospy.get_param("~deterministic")
+        self.num_particles = rospy.get_param("~num_particles")
 
         # Pre-compute cosines, sines, arcsines, and arccosines:
             # Every time we run vec2pose and pose2vec it uses cosines, sines, arccosines, and arcsines

@@ -13,8 +13,7 @@ class ParticleFilter:
 
     def __init__(self):
         # Get parameters
-        self.particle_filter_frame = \
-                rospy.get_param("~particle_filter_frame")
+        self.particle_filter_frame = rospy.get_param("~particle_filter_frame")
 
         # Initialize publishers/subscribers
         #
@@ -27,21 +26,15 @@ class ParticleFilter:
         #     information, and *not* use the pose component.
         scan_topic = rospy.get_param("~scan_topic", "/scan")
         odom_topic = rospy.get_param("~odom_topic", "/odom")
-        self.laser_sub = rospy.Subscriber(scan_topic, LaserScan,
-                                          YOUR_LIDAR_CALLBACK, # TODO: Fill this in
-                                          queue_size=1)
-        self.odom_sub  = rospy.Subscriber(odom_topic, Odometry,
-                                          YOUR_ODOM_CALLBACK, # TODO: Fill this in
-                                          queue_size=1)
+        self.laser_sub = rospy.Subscriber(scan_topic, LaserScan, self.laser_cb, queue_size=1)
+        self.odom_sub  = rospy.Subscriber(odom_topic, Odometry, self.odom_cb, queue_size=1)
 
         #  *Important Note #2:* You must respond to pose
         #     initialization requests sent to the /initialpose
         #     topic. You can test that this works properly using the
         #     "Pose Estimate" feature in RViz, which publishes to
         #     /initialpose.
-        self.pose_sub  = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped,
-                                          YOUR_POSE_INITIALIZATION_CALLBACK, # TODO: Fill this in
-                                          queue_size=1)
+        self.pose_sub  = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.init_cb, queue_size=1)
 
         #  *Important Note #3:* You must publish your pose estimate to
         #     the following topic. In particular, you must use the
@@ -64,6 +57,19 @@ class ParticleFilter:
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
+
+    def odom_cb(self, data):
+        """
+        """
+
+    def laser_cb(self, data):
+        """
+        """
+
+    def init_cb(self, data):
+        """
+        """
+
 
 
 if __name__ == "__main__":
