@@ -1,4 +1,6 @@
+import this
 import numpy as np
+from math import sqrt, pi, exp
 from scan_simulator_2d import PyScanSimulator2D
 
 import rospy
@@ -19,14 +21,15 @@ class SensorModel:
         ####################################
         # TODO
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
+        self.z_max = 201
         ####################################
 
         # Precompute the sensor model table
@@ -69,7 +72,21 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        raise NotImplementedError
+        self.sensor_model_table = np.fromfunction(lambda x, y: self.find_prob(x, y), \
+                                                    (self.table_width, self.table_width), dtype=float)
+
+        # normalizing along row (inefficient)
+        # def normalize_row(self, row):
+        #     sum = np.sum(row)
+        #     return np.multiply(row, 1.0/sum)
+
+        # self.sensor_model_table = np.apply_along_axis(normalize_row, 1, self.sensor_model_table)
+
+        #normalize along row
+        self.sensor_model_table = self.sensor_model_table / self.sensor_model_table.sum(axis = 1)
+        #normalize along column
+        self.sensor_model_table = self.sensor_model_table / self.sensor_model_table.sum(axis = 0)
+
 
     def evaluate(self, particles, observation):
         """
@@ -106,6 +123,31 @@ class SensorModel:
         scans = self.scan_sim.scan(particles)
 
         ####################################
+
+
+    def find_p_hit(self, z_k, d):
+        if(z_k <= self.z_max):
+            return 1.0/(sqrt(2*pi*self.sigma_hit**2))*exp(-(z_k-d)**2 / 2*self.sigma_hit**2)
+        else:
+            return 0.0
+    
+    def find_p_short(self, z_k, d):
+        if(z_k <= d and d != 0):
+            return 2.0/d * (1-z_k/d)
+        else:
+            return 0.0
+
+    def find_p_max(self, z_k):
+        return 1.0 if (self.z_max - 1 <= z_k and z_k <= self.z_max) else 0.0
+
+    def find_p_rand(self, z_k):
+        return 1.0/self.z_max if z_k <= self.z_max else 0.0
+
+    # requires z_k to be <= z_k and >= 0
+    def find_prob(self, z_k, d):
+        return self.alpha_hit*self.find_p_hit(z_k, d) + self.alpha_short*self.find_p_short(z_k, d) \
+                + self.alpha_max*self.find_p_max(z_k) + self.alpha_rand*self.find_p_rand(z_k)
+
 
     def map_callback(self, map_msg):
         # Convert the map to a numpy array
