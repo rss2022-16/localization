@@ -14,7 +14,7 @@ class TestMotionModel(unittest.TestCase):
         self.particles = np.array(TEST_PARTICLES)
         self.odom = np.array(TEST_MOTION_MODEL_ODOM)
         self.expected = np.array(TEST_MOTION_MODEL_RESULTS)
-        
+
         self.tol = 1e-2
 
     def tearDown(self):
