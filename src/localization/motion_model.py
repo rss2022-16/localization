@@ -4,7 +4,6 @@ Notes:
 - How do we get "deterministic" and "num_particles" parameters into this file (for integration)
 """
 
-import rospy
 import numpy as np
 
 class MotionModel:
@@ -30,7 +29,6 @@ class MotionModel:
         tmu, tsig = 1, 0.1
         self.points = 1000
         self.noise = np.random.normal([xmu, ymu, tmu], [xsig, ysig, tsig], size = (self.points, 3))
-        print self.noise
 
     def evaluate(self, particles, odometry):
         """
@@ -50,8 +48,6 @@ class MotionModel:
             particles: An updated matrix of the
                 same size
         """
-        rospy.loginfo(particles[0])
-
         for i in range(len(particles)):
 
             if self.deterministic:
