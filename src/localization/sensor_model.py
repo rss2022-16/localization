@@ -5,6 +5,7 @@ import rospy
 import tf
 from nav_msgs.msg import OccupancyGrid
 from tf.transformations import quaternion_from_euler
+import matplotlib.pyplot as plt
 
 class SensorModel:
 
@@ -19,11 +20,11 @@ class SensorModel:
         ####################################
         # TODO
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -69,7 +70,88 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        raise NotImplementedError
+        # raise NotImplementedError
+        z_max= self.table_width-1
+        self.sensor_model_table = np.zeros((self.table_width, self.table_width))
+        for j in range(self.table_width): # d values
+            prob_hit_sum = 0.
+            # norm_sum = 0.
+            prob_hit_list = np.zeros(self.table_width)
+            # prob_hit_list = []
+            for i in range(self.table_width): # z values
+                prob_hit = (1./(self.sigma_hit * np.sqrt(2.*np.pi))) * np.exp(-(float(i- j)**2)/(2.*(self.sigma_hit**2)))
+                # prob_hit = np.exp(-((i-j)**2.)/(2.*self.sigma_hit**2.))
+                prob_hit_sum += prob_hit
+                prob_hit_list[i] = prob_hit
+                # prob_hit_list.append(prob_hit)
+            # for i in range(self.table_width):
+                # prob_hit = self.alpha_hit * (prob_hit_list[i]/prob_hit_sum)
+                if i <= j and j!= 0:
+                    # prob_short = self.alpha_short * (2./float(j)) * (1.-(float(i/j)))
+                    prob_short = 2.0 * self.alpha_short * (j - i) / float(j ** 2)
+                else:
+                    prob_short = 0.
+                if i == z_max:
+                    prob_max = self.alpha_max 
+                else:
+                    prob_max = 0.
+                if i <= z_max:
+                    prob_rand = self.alpha_rand * (1./float(z_max))
+                else:
+                    prob_rand = 0.
+                prob = prob_short + prob_max + prob_rand
+                # norm_sum += prob
+                self.sensor_model_table[i][j] = prob
+            # Deal with hit
+            prob_hit = self.alpha_hit * (prob_hit_list/prob_hit_sum)
+            self.sensor_model_table[:, j] += prob_hit
+            # norm_sum += self.alpha_hit
+            # self.sensor_model_table[:, j] /= norm_sum
+            
+        # normalize columns
+        print(self.sensor_model_table)
+        print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+        self.sensor_model_table = self.sensor_model_table/self.sensor_model_table.sum(axis = 0, keepdims = 1)
+
+        # plt.plot(self.sensor_model_table)
+        print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+            # for k in range(self.table_width):
+            #     column_sum = np.sum(self.sensor_model_table, axis = 0)
+
+        
+        # # raise NotImplementedError
+        # z_max= self.table_width-1
+        # self.sensor_model_table = np.zeros((self.table_width, self.table_width))
+        # for i in range(self.table_width): # z values
+        #     prob_hit_sum = 0.
+        #     prob_hit_list = []
+        #     for j in range(self.table_width): # d values
+        #         prob_hit = (1./np.sqrt(2.*np.pi*(self.sigma_hit**2.))) * np.exp(-((float(i)-float(j))**2.)/(2.*self.sigma_hit**2.))
+        #         # prob_hit = np.exp(-((i-j)**2.)/(2.*self.sigma_hit**2.))
+        #         prob_hit_sum += prob_hit
+        #         prob_hit_list.append(prob_hit)
+        #     for j in range(self.table_width):
+        #         prob_hit = self.alpha_hit * (prob_hit_list[j]/prob_hit_sum)
+        #         if i <= j and j!= 0:
+        #             prob_short = self.alpha_short * (2./float(j)) * (1.-(float(i)/float(j)))
+        #         else:
+        #             prob_short = 0.
+        #         if i == z_max:
+        #             prob_max = self.alpha_max 
+        #         else:
+        #             prob_max = 0.
+        #         prob_rand = self.alpha_rand * (1./float(z_max))
+        #         prob = prob_hit + prob_short + prob_max + prob_rand
+        #         self.sensor_model_table[i][j] = prob
+            
+        # # normalize columns
+        # print(self.sensor_model_table)
+        # print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+        # self.sensor_model_table = self.sensor_model_table/self.sensor_model_table.sum(axis = 0, keepdims = 1)
+        # print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+        #     # for k in range(self.table_width):
+        #     #     column_sum = np.sum(self.sensor_model_table, axis = 0)
+
 
     def evaluate(self, particles, observation):
         """
@@ -105,6 +187,10 @@ class SensorModel:
 
         scans = self.scan_sim.scan(particles)
 
+        # lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
+        # scans = scans/(self.map_resolution*lidar_scale_to_map_scale)
+        # observation = observation/(self.map_resolution*lidar_scale_to_map_scale)
+
         ####################################
 
     def map_callback(self, map_msg):
@@ -135,3 +221,6 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
+if __name__ == '__main__':
+    SensorModel()
