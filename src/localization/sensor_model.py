@@ -351,7 +351,7 @@ class SensorModel:
         pixel_observation = np.clip(pixel_observation, 0, self.table_width)
         pixel_scans = np.clip(pixel_scans, 0, self.table_width)
 
-        result = np.array(TEST_PRECOMPUTED_TABLE)[pixel_observation.astype(int), pixel_scans.astype(int)]
+        result = np.array(self.sensor_model_table)[pixel_observation.astype(int), pixel_scans.astype(int)]
 
         return np.power(np.prod(result, axis = 1), 1.0/2.2)
 
