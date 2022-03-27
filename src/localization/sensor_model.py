@@ -12,11 +12,11 @@ class SensorModel:
 
     def __init__(self):
         # Fetch parameters
-        self.map_topic = rospy.get_param("~map_topic")
-        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
-        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
-        self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
-        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
+        self.map_topic = rospy.get_param("~map_topic", "/map")
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle", 100)
+        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization", 500)
+        self.scan_field_of_view = rospy.get_param("~scan_field_of_view", 4.71)
+        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale", 1.0)
 
         ####################################
         # TODO
@@ -148,8 +148,7 @@ class SensorModel:
         pixel_observation = np.clip(pixel_observation, 0, self.table_width-1)
         pixel_scans = np.clip(pixel_scans, 0, self.table_width-1)
 
-        result = np.array(self.sensor_model_table)[pixel_observation.astype(int), pixel_scans.astype(int)]
-        print(np.sum(result))
+        result = self.sensor_model_table[np.rint(pixel_observation).astype(int), np.rint(pixel_scans).astype(int)]
         return np.power(np.prod(result, axis = 1), 1.0/2.2)
 
         
