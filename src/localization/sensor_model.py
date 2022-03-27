@@ -145,11 +145,11 @@ class SensorModel:
         pixel_scans = scans/scalar
         pixel_observation = observation/scalar
 
-        pixel_observation = np.clip(pixel_observation, 0, self.table_width)
-        pixel_scans = np.clip(pixel_scans, 0, self.table_width)
+        pixel_observation = np.clip(pixel_observation, 0, self.table_width-1)
+        pixel_scans = np.clip(pixel_scans, 0, self.table_width-1)
 
         result = np.array(self.sensor_model_table)[pixel_observation.astype(int), pixel_scans.astype(int)]
-
+        print(np.sum(result))
         return np.power(np.prod(result, axis = 1), 1.0/2.2)
 
         
