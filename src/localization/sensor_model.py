@@ -16,6 +16,7 @@ class SensorModel:
         self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
         self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
         self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
+        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
 
         ####################################
         # TODO
@@ -45,6 +46,7 @@ class SensorModel:
         # Subscribe to the map
         self.map = None
         self.map_set = False
+        self.map_resolution = None
         rospy.Subscriber(
                 self.map_topic,
                 OccupancyGrid,
@@ -99,47 +101,7 @@ class SensorModel:
             self.sensor_model_table[:, j] += prob_hit
             
         # normalize columns
-        #print(self.sensor_model_table)
-        #print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
         self.sensor_model_table = self.sensor_model_table/self.sensor_model_table.sum(axis = 0, keepdims = 1)
-
-        #print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
-            # for k in range(self.table_width):
-            #     column_sum = np.sum(self.sensor_model_table, axis = 0)
-
-        
-        # # raise NotImplementedError
-        # z_max= self.table_width-1
-        # self.sensor_model_table = np.zeros((self.table_width, self.table_width))
-        # for i in range(self.table_width): # z values
-        #     prob_hit_sum = 0.
-        #     prob_hit_list = []
-        #     for j in range(self.table_width): # d values
-        #         prob_hit = (1./np.sqrt(2.*np.pi*(self.sigma_hit**2.))) * np.exp(-((float(i)-float(j))**2.)/(2.*self.sigma_hit**2.))
-        #         # prob_hit = np.exp(-((i-j)**2.)/(2.*self.sigma_hit**2.))
-        #         prob_hit_sum += prob_hit
-        #         prob_hit_list.append(prob_hit)
-        #     for j in range(self.table_width):
-        #         prob_hit = self.alpha_hit * (prob_hit_list[j]/prob_hit_sum)
-        #         if i <= j and j!= 0:
-        #             prob_short = self.alpha_short * (2./float(j)) * (1.-(float(i)/float(j)))
-        #         else:
-        #             prob_short = 0.
-        #         if i == z_max:
-        #             prob_max = self.alpha_max 
-        #         else:
-        #             prob_max = 0.
-        #         prob_rand = self.alpha_rand * (1./float(z_max))
-        #         prob = prob_hit + prob_short + prob_max + prob_rand
-        #         self.sensor_model_table[i][j] = prob
-            
-        # # normalize columns
-        # print(self.sensor_model_table)
-        # print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
-        # self.sensor_model_table = self.sensor_model_table/self.sensor_model_table.sum(axis = 0, keepdims = 1)
-        # print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
-        #     # for k in range(self.table_width):
-        #     #     column_sum = np.sum(self.sensor_model_table, axis = 0)
 
 
     def evaluate(self, particles, observation):
@@ -173,12 +135,26 @@ class SensorModel:
         # You will probably want to use this function
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
-
         scans = self.scan_sim.scan(particles)
 
-        # lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
-        # scans = scans/(self.map_resolution*lidar_scale_to_map_scale)
-        # observation = observation/(self.map_resolution*lidar_scale_to_map_scale)
+        z_max = self.table_width - 1
+        pixel_scans = scans/(self.map_resolution * self.lidar_scale_to_map_scale)
+        pixel_observation = observation/(self.map_resolution * self.lidar_scale_to_map_scale)
+
+        pixel_scans = np.clip(pixel_scans, 0, z_max)
+        pixel_observation = np.clip(pixel_observation, 0, z_max)
+
+        probabilities = np.zeros(len(particles))
+        prob_table = self.sensor_model_table
+        for p in range(len(particles)):
+            prob = 1.0
+            for j in range(self.num_beams_per_particle):
+                d = np.rint(pixel_scans[p][j]).astype(int)
+                z = np.rint(pixel_observation[j]).astype(int)
+                prob *= prob_table[z][d]
+            probabilities[p] = prob
+        squashed_probs = np.power(probabilities, (1.0)/(2.2))
+        return squashed_probs
 
         ####################################
 
@@ -208,7 +184,7 @@ class SensorModel:
 
         # Make the map set
         self.map_set = True
-
+        self.map_resolution = map_msg.info.resolution
         print("Map initialized")
 
 if __name__ == '__main__':
