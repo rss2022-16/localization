@@ -26,5 +26,5 @@ def answer_to_2():
     Return your answers to 2 in a python list for the values z=0,3,5,8,10
     Each value should be a float
     """
-    return [.026, .0176, .012198, .0919, .712]
+    return [.032, .0234, .0179, .0919, .712]
 

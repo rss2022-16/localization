@@ -70,24 +70,17 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        # raise NotImplementedError
         z_max= self.table_width-1
         self.sensor_model_table = np.zeros((self.table_width, self.table_width))
+
         for j in range(self.table_width): # d values
             prob_hit_sum = 0.
-            # norm_sum = 0.
             prob_hit_list = np.zeros(self.table_width)
-            # prob_hit_list = []
             for i in range(self.table_width): # z values
                 prob_hit = (1./(self.sigma_hit * np.sqrt(2.*np.pi))) * np.exp(-(float(i- j)**2)/(2.*(self.sigma_hit**2)))
-                # prob_hit = np.exp(-((i-j)**2.)/(2.*self.sigma_hit**2.))
                 prob_hit_sum += prob_hit
                 prob_hit_list[i] = prob_hit
-                # prob_hit_list.append(prob_hit)
-            # for i in range(self.table_width):
-                # prob_hit = self.alpha_hit * (prob_hit_list[i]/prob_hit_sum)
                 if i <= j and j!= 0:
-                    # prob_short = self.alpha_short * (2./float(j)) * (1.-(float(i/j)))
                     prob_short = 2.0 * self.alpha_short * (j - i) / float(j ** 2)
                 else:
                     prob_short = 0.
@@ -100,21 +93,17 @@ class SensorModel:
                 else:
                     prob_rand = 0.
                 prob = prob_short + prob_max + prob_rand
-                # norm_sum += prob
                 self.sensor_model_table[i][j] = prob
             # Deal with hit
             prob_hit = self.alpha_hit * (prob_hit_list/prob_hit_sum)
             self.sensor_model_table[:, j] += prob_hit
-            # norm_sum += self.alpha_hit
-            # self.sensor_model_table[:, j] /= norm_sum
             
         # normalize columns
-        print(self.sensor_model_table)
-        print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+        #print(self.sensor_model_table)
+        #print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
         self.sensor_model_table = self.sensor_model_table/self.sensor_model_table.sum(axis = 0, keepdims = 1)
 
-        # plt.plot(self.sensor_model_table)
-        print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
+        #print(self.sensor_model_table.sum(axis = 0, keepdims = 1))
             # for k in range(self.table_width):
             #     column_sum = np.sum(self.sensor_model_table, axis = 0)
 
