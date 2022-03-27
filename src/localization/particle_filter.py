@@ -1,7 +1,9 @@
 #!/usr/bin/env python2
 
 import rospy
-import tf2_ros as tf
+import tf
+# import tf2_ros as tf
+import numpy as np
 from sensor_model import SensorModel
 from motion_model import MotionModel
 
@@ -68,9 +70,9 @@ class ParticleFilter:
         """
         time = data.header.stamp
         linear = data.twist.twist.linear
-        anglular = data.twist.twist.angular
+        angular = data.twist.twist.angular
 
-        raw_odom = np.array([linear[0], linear[1], angular[2]])
+        raw_odom = np.array([linear.x, linear.y, angular.z])
         dt = time - self.time_last_odom
         self.time_last_odom = time
         odom = raw_odom * dt.to_sec()
@@ -83,12 +85,14 @@ class ParticleFilter:
     def laser_cb(self, data):
         """
         """
-        ranges = data.ranges
+        ranges = np.array(data.ranges)
 
         particle_probs = self.sensor_model.evaluate(self.particles, ranges)
+        prob_sum = np.sum(particle_probs)
+        particle_probs = particle_probs/prob_sum
 
-        new_particle_idxs = np.random.choice(list(range(num_particles)), size=self.num_particles, replace=True, particle_probs)
-        self.particles = [self.particles[idx] for idx in new_particle_idxs]
+        new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
+        self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
 
         self.update_avg_part()
 
@@ -100,14 +104,14 @@ class ParticleFilter:
         quaternion = data.pose.orientation
         angle = tf.transformations.euler_from_quaternion(quaternion) # check that angle in 2d plane
 
-        self.particles = [[[position[0], position[1], angle[2]] for i in range(self.num_particles)]
+        self.particles = np.array([[position.x, position.y, angle.z] for i in range(self.num_particles)])
         
 
     def update_avg_part(self):
         avg_x = sum([i[0] for i in self.particles])/self.num_particles
         avg_y = sum([i[1] for i in self.particles])/self.num_particles
         thetas = np.array([i[2] for i in self.particles])
-        avg_theta = np.atan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
+        avg_theta = np.arctan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
         # self.best_particle = [avg_x, avg_y, avg_theta]
 
         odom_msg = Odometry()
