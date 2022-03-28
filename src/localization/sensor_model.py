@@ -149,6 +149,7 @@ class SensorModel:
         pixel_scans = np.clip(pixel_scans, 0, self.table_width-1)
 
         result = self.sensor_model_table[np.rint(pixel_observation).astype(int), np.rint(pixel_scans).astype(int)]
+
         return np.power(np.prod(result, axis = 1), 1.0/2.2)
 
         

@@ -55,7 +55,8 @@ class MotionModel:
 
                 # Pick a random noise from our pre-computed gaussian samples
                 noise = self.noise[np.random.randint(1, self.points)]
-                noisy_odom = np.matmul(odometry, np.diag(noise)) # Multiplying means proportional effect
+                # noisy_odom = np.matmul(odometry, np.diag(noise)) # Multiplying means proportional effec
+                noisy_odom = np.transpose([odometry[0]*noise[0], odometry[1]*noise[1], odometry[2]*noise[2]])
 
                 odom_pose = self.vec2pose(noisy_odom) # Noisy odometry pose
                 
@@ -74,13 +75,15 @@ class MotionModel:
         """
         Given a 3-element vector [x, y, theta], returns the corresponding 3x3 pose matrix.
         """
-        cos = np.cos(point[2])
-        sin = np.sin(point[2])
-        
-        T = np.array(
-            [[cos, -sin, point[0]],
-            [sin, cos, point[1]],
-            [0, 0, 1]])
+        x_array = np.array([point[:, 0]]).T
+        y_array = np.array([point[:,1]]).T
+        thetas = np.array([point[:,-1]])
+        zero = np.zeros(x_array.shape)
+        one = np.ones(x_array.shape)
+        cos = np.cos(thetas).T
+        sin = np.sin(thetas).T
+
+        T = np.concatenate((cos, -sin, x_array, sin, cos, y_array, zero, zero, one), axis = 1).reshape((3*len(point), 3))
 
         return T
 
