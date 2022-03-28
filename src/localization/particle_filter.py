@@ -9,7 +9,10 @@ from motion_model import MotionModel
 
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Point32
+
+from ackermann_msgs.msg import AckermannDriveStamped
+from sense_msgs.msg import PointCloud
 
 
 class ParticleFilter:
@@ -63,7 +66,17 @@ class ParticleFilter:
         # and the particle_filter_frame.
         self.particles = np.empty([self.num_particles, 3])
         self.time_last_odom = rospy.Time.now()
-        # self.best_particle = [0, 0, 0]
+
+        self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
+
+        # self.drive_pub = rospy.Publisher("/drive", AckermannDriveStamped, queue_size = 10)
+        # drive = AckermannDriveStamped()
+        # drive.header.stamp = rospy.Time.now()
+        # drive.header.frame_id = "base_link"
+        # drive.drive.steering_angle = 0.2
+        # drive.drive.speed = 0.25
+        # self.drive_pub.publish(drive)
+
 
     def odom_cb(self, data):
         """
@@ -77,7 +90,7 @@ class ParticleFilter:
         self.time_last_odom = time
         odom = raw_odom * dt.to_sec()
 
-        self.particles = self.motion_model.evaluate(self.particles, odom)
+        # self.particles = self.motion_model.evaluate(self.particles, odom)
 
         self.update_avg_part()
 
@@ -85,16 +98,16 @@ class ParticleFilter:
     def laser_cb(self, data):
         """
         """
-        ranges = np.array(data.ranges)
+        # ranges = np.array(data.ranges)
 
-        particle_probs = self.sensor_model.evaluate(self.particles, ranges)
+        # particle_probs = self.sensor_model.evaluate(self.particles, ranges)
         # prob_sum = np.sum(particle_probs)
         # particle_probs = particle_probs/prob_sum
 
-        new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
-        self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
+        # new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
+        # self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
 
-        self.update_avg_part()
+        # self.update_avg_part()
 
 
     def init_cb(self, data):
@@ -102,24 +115,43 @@ class ParticleFilter:
         """
         position = data.pose.pose.position
         quaternion = data.pose.pose.orientation
-        rospy.loginfo(quaternion)
-        angle = tf.transformations.euler_from_quaternion([quaternion.w, quaternion.x, quaternion.y, quaternion.z]) # check that angle in 2d plane
+        angle = tf.transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
 
         self.particles = np.array([[position.x, position.y, angle[-1]] for i in range(self.num_particles)])
 
 
     def update_avg_part(self):
+        point_msg = PointCloud()
+        point_msg.header.frame_id = "map"
+        points = []
+        for p in self.particles:
+            point = Point32()
+            point.x = 0 if abs(p[0]) < 1e-10 else p[0]
+            point.y = 0 if abs(p[1]) < 1e-10 else p[1]
+            point.z = 0 if abs(p[2]) < 1e-10 else p[2]
+            points.append(point)
+        point_msg.points = points
+        self.cloud.publish(point_msg)
+
         avg_x = sum([i[0] for i in self.particles])/self.num_particles
         avg_y = sum([i[1] for i in self.particles])/self.num_particles
         thetas = np.array([i[2] for i in self.particles])
         avg_theta = np.arctan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
-        # self.best_particle = [avg_x, avg_y, avg_theta]
+        
+        rospy.loginfo("pred")
+        rospy.loginfo([avg_x, avg_y, avg_theta])
 
         odom_msg = Odometry()
+        odom_msg.header.frame_id = "map"
+        odom_msg.child_frame_id = "base_link_pf"
         odom_msg.pose.pose.position.x = avg_x
         odom_msg.pose.pose.position.y = avg_y
         odom_msg.pose.pose.position.z = 0
-        odom_msg.pose.pose.orientation = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+        angle = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+        odom_msg.pose.pose.orientation.x = angle[0]
+        odom_msg.pose.pose.orientation.y = angle[1]
+        odom_msg.pose.pose.orientation.z = angle[2]
+        odom_msg.pose.pose.orientation.w = angle[3]
         self.odom_pub.publish(odom_msg)
 
 
