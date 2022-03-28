@@ -12,7 +12,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, Point32
 
 from ackermann_msgs.msg import AckermannDriveStamped
-from sense_msgs.msg import PointCloud
+from sensor_msgs.msg import PointCloud
 
 
 class ParticleFilter:
@@ -64,18 +64,12 @@ class ParticleFilter:
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
-        self.particles = np.empty([self.num_particles, 3])
+        self.particles = np.zeros([self.num_particles, 3])
         self.time_last_odom = rospy.Time.now()
 
         self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
 
-        # self.drive_pub = rospy.Publisher("/drive", AckermannDriveStamped, queue_size = 10)
-        # drive = AckermannDriveStamped()
-        # drive.header.stamp = rospy.Time.now()
-        # drive.header.frame_id = "base_link"
-        # drive.drive.steering_angle = 0.2
-        # drive.drive.speed = 0.25
-        # self.drive_pub.publish(drive)
+        self.drive_pub = rospy.Publisher("/drive", AckermannDriveStamped, queue_size = 10)
 
 
     def odom_cb(self, data):
@@ -90,7 +84,7 @@ class ParticleFilter:
         self.time_last_odom = time
         odom = raw_odom * dt.to_sec()
 
-        # self.particles = self.motion_model.evaluate(self.particles, odom)
+        self.particles = self.motion_model.evaluate(self.particles, odom)
 
         self.update_avg_part()
 
@@ -98,6 +92,13 @@ class ParticleFilter:
     def laser_cb(self, data):
         """
         """
+        drive = AckermannDriveStamped()
+        drive.header.stamp = rospy.Time.now()
+        drive.header.frame_id = "base_link"
+        drive.drive.steering_angle = 0.2
+        drive.drive.speed = 0.25
+        self.drive_pub.publish(drive)
+
         # ranges = np.array(data.ranges)
 
         # particle_probs = self.sensor_model.evaluate(self.particles, ranges)
@@ -126,12 +127,12 @@ class ParticleFilter:
         points = []
         for p in self.particles:
             point = Point32()
-            point.x = 0 if abs(p[0]) < 1e-10 else p[0]
-            point.y = 0 if abs(p[1]) < 1e-10 else p[1]
-            point.z = 0 if abs(p[2]) < 1e-10 else p[2]
+            point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
+            point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
+            point.z = 0
             points.append(point)
         point_msg.points = points
-        self.cloud.publish(point_msg)
+        self.cloud_pub.publish(point_msg)
 
         avg_x = sum([i[0] for i in self.particles])/self.num_particles
         avg_y = sum([i[1] for i in self.particles])/self.num_particles
