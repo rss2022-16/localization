@@ -88,8 +88,8 @@ class ParticleFilter:
         ranges = np.array(data.ranges)
 
         particle_probs = self.sensor_model.evaluate(self.particles, ranges)
-        prob_sum = np.sum(particle_probs)
-        particle_probs = particle_probs/prob_sum
+        # prob_sum = np.sum(particle_probs)
+        # particle_probs = particle_probs/prob_sum
 
         new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
         self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
@@ -100,12 +100,13 @@ class ParticleFilter:
     def init_cb(self, data):
         """
         """
-        position = data.pose.position
-        quaternion = data.pose.orientation
-        angle = tf.transformations.euler_from_quaternion(quaternion) # check that angle in 2d plane
+        position = data.pose.pose.position
+        quaternion = data.pose.pose.orientation
+        rospy.loginfo(quaternion)
+        angle = tf.transformations.euler_from_quaternion([quaternion.w, quaternion.x, quaternion.y, quaternion.z]) # check that angle in 2d plane
 
-        self.particles = np.array([[position.x, position.y, angle.z] for i in range(self.num_particles)])
-        
+        self.particles = np.array([[position.x, position.y, angle[-1]] for i in range(self.num_particles)])
+
 
     def update_avg_part(self):
         avg_x = sum([i[0] for i in self.particles])/self.num_particles
