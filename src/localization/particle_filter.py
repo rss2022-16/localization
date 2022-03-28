@@ -84,6 +84,8 @@ class ParticleFilter:
         self.time_last_odom = time
         odom = raw_odom * dt.to_sec()
 
+
+
         self.particles = self.motion_model.evaluate(self.particles, odom)
 
         self.update_avg_part()
@@ -138,9 +140,6 @@ class ParticleFilter:
         avg_y = sum([i[1] for i in self.particles])/self.num_particles
         thetas = np.array([i[2] for i in self.particles])
         avg_theta = np.arctan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
-        
-        rospy.loginfo("pred")
-        rospy.loginfo([avg_x, avg_y, avg_theta])
 
         odom_msg = Odometry()
         odom_msg.header.frame_id = "map"
