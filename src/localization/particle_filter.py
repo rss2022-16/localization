@@ -19,6 +19,8 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, Point32
 from ackermann_msgs.msg import AckermannDriveStamped
 from sensor_msgs.msg import PointCloud
 
+from std_msgs.msg import Float32
+
 
 class ParticleFilter:
 
@@ -81,6 +83,10 @@ class ParticleFilter:
 
         self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
 
+        self.error_pub = rospy.Publisher("/error", Float32, queue_size = 1)
+        self.x = 0
+        self.y = 0
+
 
     def odom_cb(self, data):
         """
@@ -97,6 +103,9 @@ class ParticleFilter:
         self.particles = self.motion_model.evaluate(self.particles, odom)
 
         self.update_avg_part()
+
+        self.x = data.pose.pose.position.x
+        self.y = data.pose.pose.position.y
 
 
     def laser_cb(self, data):
@@ -123,6 +132,8 @@ class ParticleFilter:
 
         self.particles = np.array([[position.x, position.y, angle[-1]] for i in range(self.num_particles)])
 
+        self.x = position.x
+        self.y = position.y
 
     def update_avg_part(self):
         points = []
@@ -135,10 +146,11 @@ class ParticleFilter:
         self.cloud_msg.points = points
         self.cloud_pub.publish(self.cloud_msg)
 
-        avg_x = np.average(self.particles[:,0])
-        avg_y = np.average(self.particles[:,1])
         avg_theta = np.arctan2(np.sum(np.sin(self.particles[:,2])), np.sum(np.cos(self.particles[:,2])))
+        avg_x = np.average(self.particles[:,0]) - np.cos(avg_theta)*.27
+        avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.27
 
+        self.odom_msg.header.stamp = rospy.Time.now()
         self.odom_msg.pose.pose.position.x = avg_x
         self.odom_msg.pose.pose.position.y = avg_y
         self.odom_msg.pose.pose.position.z = 0
@@ -148,6 +160,10 @@ class ParticleFilter:
         self.odom_msg.pose.pose.orientation.z = angle[2]
         self.odom_msg.pose.pose.orientation.w = angle[3]
         self.odom_pub.publish(self.odom_msg)
+
+        msg = Float32()
+        msg.data = np.sqrt( (self.x - avg_x)**2 + (self.y - avg_y)**2 )
+        self.error_pub.publish(msg)
 
 
 if __name__ == "__main__":

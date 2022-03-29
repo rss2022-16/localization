@@ -21,9 +21,9 @@ class MotionModel:
 
         # Pre-computing gaussian noise
         # Sigma values are the parameters we tune!
-        xmu, xsig = 1, 3
-        ymu, ysig = 1, 1
-        tmu, tsig = 1, 3
+        xmu, xsig = 0, .025
+        ymu, ysig = 0, .025
+        tmu, tsig = 0, .01
 
         self.points = 1000
         self.noise = np.random.normal([xmu, ymu, tmu], [xsig, ysig, tsig], size = (self.points, 3))
@@ -54,7 +54,8 @@ class MotionModel:
             noises = []
             for i in range(len(particles)):
                 noises.append(self.noise[np.random.randint(1, self.points)])
-            odoms = np.multiply(odoms, noises)
+            # odoms = np.multiply(odoms, noises)
+            odoms = np.add(odoms, noises)
 
         thetas = np.array([particles[:,2]])
         cosines = np.cos(thetas).T
@@ -62,11 +63,7 @@ class MotionModel:
         zeros = np.zeros(thetas.shape).T
         ones = np.ones(thetas.shape).T
         Ms_unshaped = np.concatenate((cosines, -1*sines, zeros, sines, cosines, zeros, zeros, zeros, ones), axis=1)
-        # print(np.shape(thetas))
-        # print(np.shape(Ms_unshaped))
         Ms = Ms_unshaped.reshape([len(particles), 3, 3])
-        # print(Ms[0])
-        # print(np.cos(particles[0, 2]), np.sin(particles[0, 2]))
         changes = np.matmul(Ms, odoms.reshape([len(particles), 3, 1]))
         particles = np.add(changes.reshape([len(particles), 3]), particles)
 
