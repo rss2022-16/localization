@@ -1,5 +1,10 @@
 #!/usr/bin/env python2
 
+"""
+Note:
+For keyop, use rosrun ackermann_drive_teleop keyop.py [max_speed] [max_steer] [topic name]
+"""
+
 import rospy
 import tf
 # import tf2_ros as tf
@@ -67,14 +72,16 @@ class ParticleFilter:
         self.particles = np.zeros([self.num_particles, 3])
         self.time_last_odom = rospy.Time.now()
 
-        self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
+        # self.cloud_msg = 
+        # self.odom_msg
 
-        self.drive_pub = rospy.Publisher("/drive", AckermannDriveStamped, queue_size = 10)
+        self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
 
 
     def odom_cb(self, data):
         """
         """
+        # t = rospy.loginfo(rospy.Time.now())
         time = data.header.stamp
         linear = data.twist.twist.linear
         angular = data.twist.twist.angular
@@ -84,9 +91,8 @@ class ParticleFilter:
         self.time_last_odom = time
         odom = raw_odom * dt.to_sec()
 
-
-
         self.particles = self.motion_model.evaluate(self.particles, odom)
+        # rospy.loginfo(rospy.Time.now())
 
         self.update_avg_part()
 
@@ -94,21 +100,14 @@ class ParticleFilter:
     def laser_cb(self, data):
         """
         """
-        drive = AckermannDriveStamped()
-        drive.header.stamp = rospy.Time.now()
-        drive.header.frame_id = "base_link"
-        drive.drive.steering_angle = 0.2
-        drive.drive.speed = 0.25
-        self.drive_pub.publish(drive)
+        ranges = np.array(data.ranges)
 
-        # ranges = np.array(data.ranges)
+        particle_probs = self.sensor_model.evaluate(self.particles, ranges)
+        prob_sum = np.sum(particle_probs)
+        particle_probs = particle_probs/prob_sum
 
-        # particle_probs = self.sensor_model.evaluate(self.particles, ranges)
-        # prob_sum = np.sum(particle_probs)
-        # particle_probs = particle_probs/prob_sum
-
-        # new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
-        # self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
+        new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
+        self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
 
         # self.update_avg_part()
 
@@ -124,17 +123,17 @@ class ParticleFilter:
 
 
     def update_avg_part(self):
-        point_msg = PointCloud()
-        point_msg.header.frame_id = "map"
-        points = []
-        for p in self.particles:
-            point = Point32()
-            point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
-            point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
-            point.z = 0
-            points.append(point)
-        point_msg.points = points
-        self.cloud_pub.publish(point_msg)
+        # point_msg = PointCloud()
+        # point_msg.header.frame_id = "map"
+        # points = []
+        # for p in self.particles:
+        #     point = Point32()
+        #     point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
+        #     point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
+        #     point.z = 0
+        #     points.append(point)
+        # point_msg.points = points
+        # self.cloud_pub.publish(point_msg)
 
         avg_x = sum([i[0] for i in self.particles])/self.num_particles
         avg_y = sum([i[1] for i in self.particles])/self.num_particles
@@ -153,7 +152,8 @@ class ParticleFilter:
         odom_msg.pose.pose.orientation.z = angle[2]
         odom_msg.pose.pose.orientation.w = angle[3]
         self.odom_pub.publish(odom_msg)
-
+        # rospy.loginfo(rospy.Time.now())
+        # rospy.loginfo("--")
 
 
 if __name__ == "__main__":
