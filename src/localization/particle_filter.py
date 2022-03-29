@@ -72,8 +72,12 @@ class ParticleFilter:
         self.particles = np.zeros([self.num_particles, 3])
         self.time_last_odom = rospy.Time.now()
 
-        # self.cloud_msg = 
-        # self.odom_msg
+        self.cloud_msg = PointCloud()
+        self.cloud_msg.header.frame_id = "map"
+
+        self.odom_msg = Odometry()
+        self.odom_msg.header.frame_id = "map"
+        self.odom_msg.child_frame_id = "base_link_pf"
 
         self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
 
@@ -81,7 +85,6 @@ class ParticleFilter:
     def odom_cb(self, data):
         """
         """
-        # t = rospy.loginfo(rospy.Time.now())
         time = data.header.stamp
         linear = data.twist.twist.linear
         angular = data.twist.twist.angular
@@ -92,7 +95,6 @@ class ParticleFilter:
         odom = raw_odom * dt.to_sec()
 
         self.particles = self.motion_model.evaluate(self.particles, odom)
-        # rospy.loginfo(rospy.Time.now())
 
         self.update_avg_part()
 
@@ -123,37 +125,29 @@ class ParticleFilter:
 
 
     def update_avg_part(self):
-        # point_msg = PointCloud()
-        # point_msg.header.frame_id = "map"
-        # points = []
-        # for p in self.particles:
-        #     point = Point32()
-        #     point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
-        #     point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
-        #     point.z = 0
-        #     points.append(point)
-        # point_msg.points = points
-        # self.cloud_pub.publish(point_msg)
+        points = []
+        for p in self.particles:
+            point = Point32()
+            point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
+            point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
+            point.z = 0
+            points.append(point)
+        self.cloud_msg.points = points
+        self.cloud_pub.publish(self.cloud_msg)
 
-        avg_x = sum([i[0] for i in self.particles])/self.num_particles
-        avg_y = sum([i[1] for i in self.particles])/self.num_particles
-        thetas = np.array([i[2] for i in self.particles])
-        avg_theta = np.arctan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
+        avg_x = np.average(self.particles[:,0])
+        avg_y = np.average(self.particles[:,1])
+        avg_theta = np.arctan2(np.sum(np.sin(self.particles[:,2])), np.sum(np.cos(self.particles[:,2])))
 
-        odom_msg = Odometry()
-        odom_msg.header.frame_id = "map"
-        odom_msg.child_frame_id = "base_link_pf"
-        odom_msg.pose.pose.position.x = avg_x
-        odom_msg.pose.pose.position.y = avg_y
-        odom_msg.pose.pose.position.z = 0
+        self.odom_msg.pose.pose.position.x = avg_x
+        self.odom_msg.pose.pose.position.y = avg_y
+        self.odom_msg.pose.pose.position.z = 0
         angle = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
-        odom_msg.pose.pose.orientation.x = angle[0]
-        odom_msg.pose.pose.orientation.y = angle[1]
-        odom_msg.pose.pose.orientation.z = angle[2]
-        odom_msg.pose.pose.orientation.w = angle[3]
-        self.odom_pub.publish(odom_msg)
-        # rospy.loginfo(rospy.Time.now())
-        # rospy.loginfo("--")
+        self.odom_msg.pose.pose.orientation.x = angle[0]
+        self.odom_msg.pose.pose.orientation.y = angle[1]
+        self.odom_msg.pose.pose.orientation.z = angle[2]
+        self.odom_msg.pose.pose.orientation.w = angle[3]
+        self.odom_pub.publish(self.odom_msg)
 
 
 if __name__ == "__main__":

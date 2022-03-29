@@ -21,9 +21,9 @@ class MotionModel:
 
         # Pre-computing gaussian noise
         # Sigma values are the parameters we tune!
-        xmu, xsig = 1, 3
-        ymu, ysig = 1, 1.5
-        tmu, tsig = 1, 3
+        xmu, xsig = 1, 0.5
+        ymu, ysig = 0, 0.05
+        tmu, tsig = 1, 0.5
         self.points = 1000
         self.noise = np.random.normal([xmu, ymu, tmu], [xsig, ysig, tsig], size = (self.points, 3))
 
@@ -64,7 +64,7 @@ class MotionModel:
 
                 # Pick a random noise from our pre-computed gaussian samples
                 noise = self.noise[np.random.randint(1, self.points)]
-                noisy_odom = [odometry[0]*noise[0], odometry[1]*noise[1], odometry[2]*noise[2]]
+                noisy_odom = [odometry[0]*noise[0], odometry[1] + noise[1], odometry[2]*noise[2]]
 
                 cos = np.cos(particles[i, 2])
                 sin = np.sin(particles[i, 2])
@@ -75,4 +75,4 @@ class MotionModel:
 
                 particles[i] = [x, y, t]
 
-        return particles
+        return np.array(particles)
