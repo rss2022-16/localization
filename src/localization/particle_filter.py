@@ -147,8 +147,8 @@ class ParticleFilter:
         self.cloud_pub.publish(self.cloud_msg)
 
         avg_theta = np.arctan2(np.sum(np.sin(self.particles[:,2])), np.sum(np.cos(self.particles[:,2])))
-        avg_x = np.average(self.particles[:,0]) - np.cos(avg_theta)*.27
-        avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.27
+        avg_x = np.average(self.particles[:,0]) - np.cos(avg_theta)*.275
+        avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.275
 
         self.odom_msg.header.stamp = rospy.Time.now()
         self.odom_msg.pose.pose.position.x = avg_x
