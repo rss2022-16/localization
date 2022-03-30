@@ -7,14 +7,14 @@ For keyop, use rosrun ackermann_drive_teleop keyop.py [max_speed] [max_steer] [t
 
 import rospy
 import tf
-# import tf2_ros as tf
+import tf2_ros
 import numpy as np
 from sensor_model import SensorModel
 from motion_model import MotionModel
 
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, Point32
+from geometry_msgs.msg import PoseWithCovarianceStamped, Point32, TransformStamped
 
 from ackermann_msgs.msg import AckermannDriveStamped
 from sensor_msgs.msg import PointCloud
@@ -88,7 +88,11 @@ class ParticleFilter:
         self.y = 0
 
         # Initialize Broadcaster
-
+        self.br = tf2_ros.TransformBroadcaster()
+        self.transform = TransformStamped()
+        self.transform.header.stamp = rospy.Time.now()
+        self.transform.header.frame_id = "map"
+        self.transform.child_frame_id = self.particle_filter_frame
 
     def odom_cb(self, data):
         """
@@ -124,8 +128,6 @@ class ParticleFilter:
         new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
         self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
 
-        # self.update_avg_part()
-
 
     def init_cb(self, data):
         """
@@ -155,7 +157,18 @@ class ParticleFilter:
         avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.275
         
         # Publish transform
-        
+        if self.transform is not None:
+            self.transform.header.stamp = rospy.Time.now()
+            self.transform.transform.translation.x = avg_x
+            self.transform.transform.translation.y = avg_y
+            self.transform.transform.translation.z = 0
+            quat = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+            self.transform.transform.rotation.x = quat[0]
+            self.transform.transform.rotation.y = quat[1]
+            self.transform.transform.rotation.z = quat[2]
+            self.transform.transform.rotation.w = quat[3]
+            self.br.sendTransform(self.transform)
+
         self.odom_msg.header.stamp = rospy.Time.now()
         self.odom_msg.pose.pose.position.x = avg_x
         self.odom_msg.pose.pose.position.y = avg_y
