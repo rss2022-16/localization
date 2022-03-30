@@ -28,7 +28,7 @@ class ParticleFilter:
         # Get parameters
         self.particle_filter_frame = rospy.get_param("~particle_filter_frame")
         self.num_particles = rospy.get_param("~num_particles")
-
+        self.num_beams = rospy.get_param("~num_beams_per_particle")
         # Initialize publishers/subscribers
         #
         #  *Important Note #1:* It is critical for your particle
@@ -79,13 +79,15 @@ class ParticleFilter:
 
         self.odom_msg = Odometry()
         self.odom_msg.header.frame_id = "map"
-        self.odom_msg.child_frame_id = "base_link_pf"
+        self.odom_msg.child_frame_id = self.particle_filter_frame
 
         self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
 
         self.error_pub = rospy.Publisher("/error", Float32, queue_size = 1)
         self.x = 0
         self.y = 0
+
+        # Initialize Broadcaster
 
 
     def odom_cb(self, data):
@@ -112,7 +114,9 @@ class ParticleFilter:
         """
         """
         ranges = np.array(data.ranges)
-
+        ranges = [ranges[i] for i in np.linspace(0,1080,num=self.num_beams,dtype=int)]
+        ranges = np.array(ranges)
+        # ^^ Downsampling to 100 beams
         particle_probs = self.sensor_model.evaluate(self.particles, ranges)
         prob_sum = np.sum(particle_probs)
         particle_probs = particle_probs/prob_sum
@@ -149,7 +153,9 @@ class ParticleFilter:
         avg_theta = np.arctan2(np.sum(np.sin(self.particles[:,2])), np.sum(np.cos(self.particles[:,2])))
         avg_x = np.average(self.particles[:,0]) - np.cos(avg_theta)*.275
         avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.275
-
+        
+        # Publish transform
+        
         self.odom_msg.header.stamp = rospy.Time.now()
         self.odom_msg.pose.pose.position.x = avg_x
         self.odom_msg.pose.pose.position.y = avg_y
