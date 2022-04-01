@@ -21,9 +21,10 @@ class MotionModel:
 
         # Pre-computing gaussian noise
         # Sigma values are the parameters we tune!
-        xmu, xsig = 1, 0.1
-        ymu, ysig = 1, 0.025
-        tmu, tsig = 1, 0.1
+        xmu, xsig = 0, .025
+        ymu, ysig = 0, .025
+        tmu, tsig = 0, .01
+
         self.points = 1000
         self.noise = np.random.normal([xmu, ymu, tmu], [xsig, ysig, tsig], size = (self.points, 3))
 
@@ -45,53 +46,58 @@ class MotionModel:
             particles: An updated matrix of the
                 same size
         """
-        for i in range(len(particles)):
 
-            if self.deterministic:
+        odoms = np.tile(np.array(odometry), (len(particles), 1))
+        if not self.deterministic:
+            # odoms = np.tile(np.array(odometry), (1, len(self.particles)))
+        # else:
+            noises = []
+            for i in range(len(particles)):
+                noises.append(self.noise[np.random.randint(1, self.points)])
+            # odoms = np.multiply(odoms, noises)
+            odoms = np.add(odoms, noises)
 
-                odom_pose = self.vec2pose(odometry) # Deterministic odometry pose
-
-            else:
-
-                # Pick a random noise from our pre-computed gaussian samples
-                noise = self.noise[np.random.randint(1, self.points)]
-                noisy_odom = odometry * np.diag(noise) # Multiplying means proportional effect
-
-                odom_pose = self.vec2pose(noisy_odom) # Noisy odometry pose
-
-            # Compose particle pose and (noisy or deterministic) odometry pose into new particle pose
-            particle_pose = self.vec2pose(particles[i])
-            new_pose = np.matmul(particle_pose, odom_pose)
-            new_particle = self.pose2vec(new_pose)
-            new_particle[2] = particles[i,2] + odometry[2]
-
-            # Can we do this in place or do we need to make a new array for new particles?
-            particles[i] = new_particle
+        thetas = np.array([particles[:,2]])
+        cosines = np.cos(thetas).T
+        sines = np.sin(thetas).T
+        zeros = np.zeros(thetas.shape).T
+        ones = np.ones(thetas.shape).T
+        Ms_unshaped = np.concatenate((cosines, -1*sines, zeros, sines, cosines, zeros, zeros, zeros, ones), axis=1)
+        Ms = Ms_unshaped.reshape([len(particles), 3, 3])
+        changes = np.matmul(Ms, odoms.reshape([len(particles), 3, 1]))
+        particles = np.add(changes.reshape([len(particles), 3]), particles)
 
         return particles
 
-    def vec2pose(self, point):
-        """
-        Given a 3-element vector [x, y, theta], returns the corresponding 3x3 pose matrix.
-        """
-        T = np.array(
-            [[np.cos(point[2]), -np.sin(point[2]), point[0]],
-            [np.sin(point[2]), np.cos(point[2]), point[1]],
-            [0, 0, 1]])
 
-        return T
-
-    def sign(self, x):
-        if x < 0:
-            return -1
-        return 1
-
-    def pose2vec(self, pose):
-        """
-        Given a 3x3 pose matrix, returns the corresponding 3-element vector [x, y, theta].
-        """
-        # Arccosine loses sign information, need to check both sin and cos to tell which quadrant theta is in
-        theta = np.arccos(pose[0,0]) * (self.sign(pose[1,0]))
-        p = np.array([pose[0,2], pose[1,2], theta])
-
-        return p
+        # if self.deterministic:
+        #
+        #     for i in range(len(particles)):
+        #
+        #         cos = np.cos(particles[i, 2])
+        #         sin = np.sin(particles[i, 2])
+        #
+        #         x = cos * odometry[0] - sin * odometry[1] + particles[i, 0]
+        #         y = sin * odometry[0] + cos * odometry[1] + particles[i, 1]
+        #         t = odometry[2] + particles[i, 2]
+        #
+        #         particles[i] = [x, y, t]
+        #
+        # else:
+        #
+        #     for i in range(len(particles)):
+        #
+        #         # Pick a random noise from our pre-computed gaussian samples
+        #         noise = self.noise[np.random.randint(1, self.points)]
+        #         noisy_odom = [odometry[0]*noise[0], odometry[1] * noise[1], odometry[2]*noise[2]]
+        #
+        #         cos = np.cos(particles[i, 2])
+        #         sin = np.sin(particles[i, 2])
+        #
+        #         x = cos * noisy_odom[0] - sin * noisy_odom[1] + particles[i, 0]
+        #         y = sin * noisy_odom[0] + cos * noisy_odom[1] + particles[i, 1]
+        #         t = noisy_odom[2] + particles[i, 2]
+        #
+        #         particles[i] = [x, y, t]
+        #
+        # return np.array(particles)

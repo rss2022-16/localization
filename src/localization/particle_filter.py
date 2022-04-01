@@ -1,15 +1,25 @@
 #!/usr/bin/env python2
 
+"""
+Note:
+For keyop, use rosrun ackermann_drive_teleop keyop.py [max_speed] [max_steer] [topic name]
+"""
+
 import rospy
 import tf
-# import tf2_ros as tf
+import tf2_ros
 import numpy as np
 from sensor_model import SensorModel
 from motion_model import MotionModel
 
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Point32, TransformStamped
+
+from ackermann_msgs.msg import AckermannDriveStamped
+from sensor_msgs.msg import PointCloud
+
+from std_msgs.msg import Float32
 
 
 class ParticleFilter:
@@ -18,7 +28,7 @@ class ParticleFilter:
         # Get parameters
         self.particle_filter_frame = rospy.get_param("~particle_filter_frame")
         self.num_particles = rospy.get_param("~num_particles")
-
+        self.num_beams = rospy.get_param("~num_beams_per_particle")
         # Initialize publishers/subscribers
         #
         #  *Important Note #1:* It is critical for your particle
@@ -61,9 +71,28 @@ class ParticleFilter:
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
-        self.particles = np.empty([self.num_particles, 3])
+        self.particles = np.zeros([self.num_particles, 3])
         self.time_last_odom = rospy.Time.now()
-        # self.best_particle = [0, 0, 0]
+
+        self.cloud_msg = PointCloud()
+        self.cloud_msg.header.frame_id = "map"
+
+        self.odom_msg = Odometry()
+        self.odom_msg.header.frame_id = "map"
+        self.odom_msg.child_frame_id = self.particle_filter_frame
+
+        self.cloud_pub = rospy.Publisher("/cloud", PointCloud, queue_size = 1)
+
+        self.error_pub = rospy.Publisher("/error", Float32, queue_size = 1)
+        self.x = 0
+        self.y = 0
+
+        # Initialize Broadcaster
+        self.br = tf2_ros.TransformBroadcaster()
+        self.transform = TransformStamped()
+        self.transform.header.stamp = rospy.Time.now()
+        self.transform.header.frame_id = "map"
+        self.transform.child_frame_id = self.particle_filter_frame
 
     def odom_cb(self, data):
         """
@@ -81,20 +110,23 @@ class ParticleFilter:
 
         self.update_avg_part()
 
+        self.x = data.pose.pose.position.x
+        self.y = data.pose.pose.position.y
+
 
     def laser_cb(self, data):
         """
         """
         ranges = np.array(data.ranges)
-
+        ranges = [ranges[i] for i in np.linspace(0,1080,num=self.num_beams,dtype=int)]
+        ranges = np.array(ranges)
+        # ^^ Downsampling to 100 beams
         particle_probs = self.sensor_model.evaluate(self.particles, ranges)
-        # prob_sum = np.sum(particle_probs)
-        # particle_probs = particle_probs/prob_sum
+        prob_sum = np.sum(particle_probs)
+        particle_probs = particle_probs/prob_sum
 
         new_particle_idxs = np.random.choice(list(range(self.num_particles)), size=self.num_particles, replace=True, p=particle_probs)
         self.particles = np.array([self.particles[idx] for idx in new_particle_idxs])
-
-        self.update_avg_part()
 
 
     def init_cb(self, data):
@@ -102,26 +134,55 @@ class ParticleFilter:
         """
         position = data.pose.pose.position
         quaternion = data.pose.pose.orientation
-        rospy.loginfo(quaternion)
-        angle = tf.transformations.euler_from_quaternion([quaternion.w, quaternion.x, quaternion.y, quaternion.z]) # check that angle in 2d plane
+        angle = tf.transformations.euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
 
         self.particles = np.array([[position.x, position.y, angle[-1]] for i in range(self.num_particles)])
 
+        self.x = position.x
+        self.y = position.y
 
     def update_avg_part(self):
-        avg_x = sum([i[0] for i in self.particles])/self.num_particles
-        avg_y = sum([i[1] for i in self.particles])/self.num_particles
-        thetas = np.array([i[2] for i in self.particles])
-        avg_theta = np.arctan2(sum(np.sin(thetas)), sum(np.cos(thetas)))
-        # self.best_particle = [avg_x, avg_y, avg_theta]
+        points = []
+        for p in self.particles:
+            point = Point32()
+            point.x = 0 if abs(p[0]) < 1e-10 else float(p[0])
+            point.y = 0 if abs(p[1]) < 1e-10 else float(p[1])
+            point.z = 0
+            points.append(point)
+        self.cloud_msg.points = points
+        self.cloud_pub.publish(self.cloud_msg)
 
-        odom_msg = Odometry()
-        odom_msg.pose.pose.position.x = avg_x
-        odom_msg.pose.pose.position.y = avg_y
-        odom_msg.pose.pose.position.z = 0
-        odom_msg.pose.pose.orientation = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
-        self.odom_pub.publish(odom_msg)
+        avg_theta = np.arctan2(np.sum(np.sin(self.particles[:,2])), np.sum(np.cos(self.particles[:,2])))
+        avg_x = np.average(self.particles[:,0]) - np.cos(avg_theta)*.275
+        avg_y = np.average(self.particles[:,1]) - np.sin(avg_theta)*.275
+        
+        # Publish transform
+        if self.transform is not None:
+            self.transform.header.stamp = rospy.Time.now()
+            self.transform.transform.translation.x = avg_x
+            self.transform.transform.translation.y = avg_y
+            self.transform.transform.translation.z = 0
+            quat = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+            self.transform.transform.rotation.x = quat[0]
+            self.transform.transform.rotation.y = quat[1]
+            self.transform.transform.rotation.z = quat[2]
+            self.transform.transform.rotation.w = quat[3]
+            self.br.sendTransform(self.transform)
 
+        self.odom_msg.header.stamp = rospy.Time.now()
+        self.odom_msg.pose.pose.position.x = avg_x
+        self.odom_msg.pose.pose.position.y = avg_y
+        self.odom_msg.pose.pose.position.z = 0
+        angle = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+        self.odom_msg.pose.pose.orientation.x = angle[0]
+        self.odom_msg.pose.pose.orientation.y = angle[1]
+        self.odom_msg.pose.pose.orientation.z = angle[2]
+        self.odom_msg.pose.pose.orientation.w = angle[3]
+        self.odom_pub.publish(self.odom_msg)
+
+        msg = Float32()
+        msg.data = np.sqrt( (self.x - avg_x)**2 + (self.y - avg_y)**2 )
+        self.error_pub.publish(msg)
 
 
 if __name__ == "__main__":
